@@ -282,7 +282,6 @@ localparam CONF_STR = {
 	"H3oU,ADPCMA CH 6,ON,OFF;",
 	"H3-;",
 	"O1,System Type,Console(AES),Arcade(MVS);",
-	"O2,CD Type,CD,CDZ;",
 	"OM,BIOS,UniBIOS,Original;",
 	"O3,Video Mode,NTSC,PAL;",
 	"-;",
@@ -293,6 +292,7 @@ localparam CONF_STR = {
 	"D4RC,Save Memory Card;",
 	"OO,Autosave,OFF,ON;",
 	"-;",
+	"O2,CD Type,CD,CDZ;",
 	"OTU,CD Speed,1x,2x,3x,4x;",
 	"OAB,CD Region,US,EU,JP,AS;",
 	"OF,CD lid,Closed,Opened;",
@@ -411,7 +411,10 @@ reg SYSTEM_TYPE, SYSTEM_CD_TYPE;
 
 reg nRESET;
 always @(posedge CLK_48M) begin
-	nRESET <= &TRASH_ADDR;
+	reg rst_n;
+
+	nRESET <= rst_n;
+	rst_n <= &TRASH_ADDR;
 	if(CLK_EN_24M_N && ~&TRASH_ADDR) TRASH_ADDR <= TRASH_ADDR + 1'b1;
 
 	if (status[0] | status[14] | buttons[1] | bk_loading | RESET) begin
@@ -604,8 +607,8 @@ wire [7:0] SDD_IN, SDD_OUT, Z80_SDD_OUT;
 wire [7:0] SDD_RD_C1;
 wire [15:0] SDA, Z80_SDA;
 wire nSDRD, nSDWR, nMREQ, nIORQ, nBUSAK;
-wire nZ80_SDRD, nZ80_SDWR, nZ80_MREQ;
-wire nZ80INT, nZ80NMI, nSDW, nSDZ80R, nSDZ80W, nSDZ80CLR;
+wire Z80_nSDRD, Z80_nSDWR, Z80_nMREQ;
+wire Z80_nINT, Z80_nNMI, nSDW, nSDZ80R, nSDZ80W, nSDZ80CLR;
 wire nSDROM, nSDMRD, nSDMWR, SDRD0, SDRD1, nZRAMCS;
 wire n2610CS, n2610RD, n2610WR;
 
@@ -1237,7 +1240,7 @@ neo_d0 D0(
 	.nBITWD0(nBITWD0),
 	.SDA_H(SDA[15:11]), .SDA_L(SDA[4:2]),
 	.nSDRD(nSDRD),	.nSDWR(nSDWR), .nMREQ(nMREQ),	.nIORQ(nIORQ),
-	.nZ80NMI(nZ80NMI),
+	.nZ80NMI(Z80_nNMI),
 	.nSDW(nSDW), .nSDZ80R(nSDZ80R), .nSDZ80W(nSDZ80W),	.nSDZ80CLR(nSDZ80CLR),
 	.nSDROM(nSDROM), .nSDMRD(nSDMRD), .nSDMWR(nSDMWR), .nZRAMCS(nZRAMCS),
 	.SDRD0(SDRD0),	.SDRD1(SDRD1),
@@ -1635,7 +1638,7 @@ always @(posedge clk_sys) begin
 	end
 end
 
-neo_zmc2 ZMC2(
+zmc2_dot ZMC2(
 	.CLK(CLK_48M),
 	.CLK_EN_12M_N(CLK_EN_12M_N),
 	.EVEN(EVEN1), .LOAD(LOAD), .H(H),
@@ -1693,7 +1696,7 @@ assign SDD_IN = (~nSDZ80R)             ? SDD_RD_C1 :
 					 8'b00000000;
 
 wire Z80_nRESET = SYSTEM_CDx ? nRESET & CD_nRESET_Z80 : nRESET;
-wire CD_HAS_Z80_BUS = (CD_USE_Z80 & ~(nBUSAK & Z80_nRESET));
+wire CD_HAS_Z80_BUS = (CD_USE_Z80 & ~(nBUSAK & CD_nRESET_Z80));
 
 wire [7:0] M1_ROM_DATA;
 reg z80rd_req;
@@ -1708,7 +1711,7 @@ always @(posedge DDRAM_CLK) begin
 	if(~old_rd1 & old_rd) z80rd_req <= ~z80rd_req;
 end
 
-wire nZ80WAIT = (z80rd_req == z80rd_ack);
+wire Z80_nWAIT = (z80rd_req == z80rd_ack);
 
 cpu_z80 Z80CPU(
 	.CLK(CLK_48M),
@@ -1716,19 +1719,19 @@ cpu_z80 Z80CPU(
 	.CLK4N_EN(CLK_EN_4M_N),
 	.nRESET(Z80_nRESET),
 	.SDA(Z80_SDA), .SDD_IN(SDD_IN), .SDD_OUT(Z80_SDD_OUT),
-	.nIORQ(nIORQ),	.nMREQ(nZ80_MREQ),	.nRD(nZ80_SDRD), .nWR(nZ80_SDWR),
+	.nIORQ(nIORQ),	.nMREQ(Z80_nMREQ), .nRD(Z80_nSDRD), .nWR(Z80_nSDWR),
 	.nBUSRQ(~CD_USE_Z80), .nBUSAK(nBUSAK),
-	.nINT(nZ80INT), .nNMI(nZ80NMI), .nWAIT(nZ80WAIT)
+	.nINT(Z80_nINT), .nNMI(Z80_nNMI), .nWAIT(Z80_nWAIT)
 );
 
 assign { SDA, SDD_OUT } = ~CD_HAS_Z80_BUS ? { Z80_SDA, Z80_SDD_OUT } : DMA_RUNNING ? { DMA_ADDR_OUT[16:1], DMA_DATA_OUT[7:0] } : { M68K_ADDR[16:1], M68K_DATA[7:0] };
-assign { nSDRD, nSDWR } = ~CD_HAS_Z80_BUS ? { nZ80_SDRD, nZ80_SDWR } : { ~CD_TR_RD_Z80, ~CD_TR_WR_Z80 };
-assign { nMREQ } = ~CD_HAS_Z80_BUS ? nZ80_MREQ : ~(CD_TR_RD_Z80 | CD_TR_WR_Z80);
+assign { nSDRD, nSDWR } = ~CD_HAS_Z80_BUS ? { Z80_nSDRD, Z80_nSDWR } : { ~CD_TR_RD_Z80, ~CD_TR_WR_Z80 };
+assign { nMREQ }        = ~CD_HAS_Z80_BUS ? { Z80_nMREQ            } : {~(CD_TR_RD_Z80 | CD_TR_WR_Z80)};
 
-assign M68K_DATA[7:0] = ~(CD_HAS_Z80_BUS & CD_TR_RD_Z80) ? 8'bzzzz_zzzz : (SDD_IN);
+assign M68K_DATA[7:0]   = ~(CD_HAS_Z80_BUS & CD_TR_RD_Z80) ? 8'bzzzz_zzzz : SDD_IN;
 
 wire [19:0] ADPCMA_ADDR;
-wire [3:0] ADPCMA_BANK;
+wire  [3:0] ADPCMA_BANK;
 wire [23:0] ADPCMB_ADDR;
 
 reg adpcm_wr, adpcm_rd;
@@ -1992,7 +1995,7 @@ jt10 YM2610(
 	.addr(SDA[1:0]),
 	.din(SDD_OUT), .dout(YM2610_DOUT),
 	.cs_n(n2610CS), .wr_n(n2610WR),
-	.irq_n(nZ80INT),
+	.irq_n(Z80_nINT),
 	.adpcma_addr(ADPCMA_ADDR), .adpcma_bank(ADPCMA_BANK), .adpcma_roe_n(nSDROE), .adpcma_data(adpcma_d),
 	.adpcmb_addr(ADPCMB_ADDR), .adpcmb_roe_n(nSDPOE), .adpcmb_data(SYSTEM_CDx ? 8'h08 : adpcmb_d),	// CD has no ADPCM-B
 	.snd_right(snd_right), .snd_left(snd_left), .snd_enable(~{4{dbg_menu}} | ~status[28:25]), .ch_enable(~status[62:57])
