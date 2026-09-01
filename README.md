@@ -14,9 +14,9 @@ This is an FPGA implementation of the NEO GEO/MVS system by [Furrtek](https://ww
 
 Note: This core does not support encrypted ROMs. Make sure the ROM has no encrypted parts before using. MAME ROM pack includes many encrypted ROMs so it's not recommended for inexperienced users. Using the .neo conversion tool with a MAME ROM set will result in some ROMs still being encrypted. There is an alternate .neo conversion tool for the Darksoft ROM set that will give you a fully decrypted set.
 
-[MAME to .neo conversion tool](https://github.com/city41/neosdconv)
-
-[Darksoft to .neo conversion tool](https://gitlab.com/loic.petit/darksoft-to-neosd/)
+* [MAME to .neo conversion tool (by Matt Greer)](https://github.com/city41/neosdconv)
+* [MAME to .neo conversion tool (by Rupert Carmichael)](https://github.com/carmiker/neoconv)
+* [Darksoft to .neo conversion tool](https://gitlab.com/loic.petit/darksoft-to-neosd/)
 
 ## Installation
 Copy the NeoGeo_\*.rbf file to the 'Console' or 'Arcade' folder (your choice) on the SD card. ROMs should go in the 'games\NeoGeo' folder. For ease of use, it is strongly suggested that people use the Darksoft ROM pack. These can be either zipped or unzipped with minimal loading speed difference. Several things must be observed:
